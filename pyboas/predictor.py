@@ -67,6 +67,7 @@ class Predictor(object):
         :return x, predictives: the x values where predictive distributions are
          evaluated and the distributions.
         """
+        verbose = kwargs.pop('verbose', False)
 
         times = np.atleast_1d(timepred)
 
