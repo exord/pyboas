@@ -8,9 +8,10 @@ import pylab as plt
 from pyboas import predictor, models
 
 # Reconstruct location of directory containing data.
+# TODO if possible make this work when script is called using execfile.
+print(__file__)
 basedir = os.path.dirname(__file__)
 datadir = os.path.abspath(os.path.join(basedir, '..', 'data'))
-print(datadir)
 
 
 def read_data():
@@ -52,7 +53,7 @@ def run():
     infos = np.zeros(len(x))
     for i in range(len(x)):
         y = post_preds[i][post_preds[i] > 0]
-        infos[i] = trapz(y * np.log(y), x[i][post_preds[i]>0])
+        infos[i] = trapz(y * np.log(y), x[i][post_preds[i] > 0])
 
     # Plot results
     fig = plt.figure()
