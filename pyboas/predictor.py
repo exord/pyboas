@@ -60,15 +60,23 @@ class Predictor(object):
         distributions are computed.
 
         :param int npoints: number of points used to evaluate likelihood.
+
+        :keyword bool verbose: if True will print number of steps performed and
+        remaing.
+
+        :return x, predictives: the x values where predictive distributions are
+         evaluated and the distributions.
         """
 
         times = np.atleast_1d(timepred)
 
         # Prepare output arrays
         predictives = np.zeros((len(times), npoints))
-        velocities = np.zeros_like(predictives)
+        x = np.zeros_like(predictives)
 
         for i, t in enumerate(times):
+            if verbose:
+                print('Step {} of {}'.format(i+1, len(times)))
             # Compute location parameter at time t
             loc = self.model(self.posterior, t, *self.modelargs)
 
@@ -82,10 +90,10 @@ class Predictor(object):
             # posterior.
             like = self.likefunc(v, loc, **kwargs)
 
-            velocities[i] = v
+            x[i] = v
             predictives[i] = like.mean(axis=1)
 
-        return velocities, predictives
+        return x, predictives
 
 
 class GaussPredictor(Predictor):
