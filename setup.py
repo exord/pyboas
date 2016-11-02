@@ -7,5 +7,5 @@ setup(name='pyboas',
       author_email='rodrigo.diaz@unige.ch',
       #url='http://obswww.unige.ch/~diazr/pygpr',
       packages=['pyboas'],
-      requires=['numpy',]
+      requires=['numpy', 'scipy']
       )
