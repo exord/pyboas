@@ -2,8 +2,22 @@
 Module containing functions and classes to produce posterior predictive
 distribution.
 """
-
 import numpy as np
+
+
+class Predictor(object):
+    """
+    Global class to implement different predictor based on different
+    distribution functions.
+    """
+    def __init__(self, tpred):
+        self.tpred = tpred
+
+
+class GaussPredictor(Predictor):
+    """
+    Class implementing predictor with Gaussian likelihood.
+    """
 
 
 def computepredictive(posterior, tpred, model, likefun, scale, *modelargs,
