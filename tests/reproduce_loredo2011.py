@@ -24,6 +24,7 @@ def read_data():
 
 
 def run():
+    #np.random.seed(010605)
 
     # Read posterior samples from data directory.
     print('Reading data...')
@@ -36,18 +37,25 @@ def run():
 
     # Burn-in and flatten chain
     s = chain.shape
-    posterior = chain[:, -500:, :].reshape(s[0] * 500, s[2])
+    #posterior = chain[:, -500:, :].reshape(s[0] * 500, s[2])
+    posterior = chain.reshape(s[0]*s[1], s[2])
 
     # Define array with times where to predict future measurement.
     timepred = np.linspace(1500, 2200, 50)
     epoch = t.mean()
 
+    # The scale of the Gaussian likelihood is taken as the mean error + jitter.
+    likescale = np.sqrt(erv.mean() ** 2 + posterior[:, -1] ** 2)
+
     # Instantianate GaussPredictor
     gpredictor = predictor.GaussPredictor(posterior, models.keplerian,
-                                          extramodelargs=(epoch, 'k1'))
+                                          extramodelargs=(epoch, 'k1')
+                                          )
+
     print('Making predictions....')
     # Make predicions
-    x, post_preds = gpredictor.make_prediction(timepred, verbose=True)
+    x, post_preds = gpredictor.make_prediction(timepred, verbose=True,
+                                               scale=likescale)
 
     # Compute information gain # TODO replace with 'informer' methods.
     infos = np.zeros(len(x))
@@ -55,21 +63,35 @@ def run():
         y = post_preds[i][post_preds[i] > 0]
         infos[i] = trapz(y * np.log(y), x[i][post_preds[i] > 0])
 
+    print('Drawing sample....')
+    # Draw samples
+    tsample = np.array([1600, 1700, 1800, 1870, 1920, 2020])
+
+    postpred_sample = gpredictor.samplepredictive(tsample,
+                                                  scale=likescale.mean())
+
     # Plot results
+    plt.ion()
     fig = plt.figure()
     ax = fig.add_subplot(111)
+
+    # Plot data.
+    ax.errorbar(t, rv, erv, fmt='or', ms=8, zorder=4)
 
     # time array for plots
     tt = np.linspace(700, 2200, 1000)
 
-    # Draw 30 random curves
+    # Pick 20 random curves from posterior
     post = posterior.copy()
     np.random.shuffle(post)
+    rvall = models.keplerian(post[:20], tt, epoch, 'k1')
 
-    rvall = models.keplerian(post[:30], tt, epoch, 'k1')
-
-    ax.errorbar(t, rv, erv, fmt='or', ms=8, zorder=4)
+    # Plot sample posterior curves
     ax.plot(tt, rvall, '-', color='0.45', alpha=0.3)
+
+    # Plot samples from posterior predictive
+    for i, t in enumerate(tsample):
+        ax.plot(t + np.random.rand(100)*5-2.5, postpred_sample[i, :100], ',m')
 
     # Define axis for expected information gain
     ax2 = ax.twinx()
@@ -80,6 +102,7 @@ def run():
     ax.set_ylabel('RV [m/s]', fontsize=16)
     ax2.set_ylabel('E[$\Delta$I]', fontsize=16)
     plt.show()
+
 
 if __name__ == '__main__':
     run()
