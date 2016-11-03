@@ -3,6 +3,7 @@ Module containing functions and classes to produce posterior predictive
 distribution.
 """
 from math import pi
+import warnings
 import numpy as np
 
 
@@ -17,8 +18,8 @@ class Predictor(object):
     def __init__(self, posterior, model, extramodelargs=()):
         """
 
-        :param np.array posterior: posterior sample with dimensions (n, k), where
-        n is the sample size and k is the dimension of space.
+        :param np.array posterior: posterior sample with dimensions (n, k),
+        where n is the sample size and k is the dimension of space.
 
         :param callable model: function taking posterior sample as first
         argument and a time as second element and producing the model that will
@@ -34,6 +35,19 @@ class Predictor(object):
         self.model = model
         self.modelargs = extramodelargs
 
+        # Initialise time for prediction.
+        self.times = None
+
+        # Initialise
+        self.predictives = np.zeros((0, 0))
+        self.x = np.zeros((0, 0))
+
+    def reset(self):
+        """Deletes previous predictions done with the Predictor."""
+        self.times = None
+        self.predictives = np.zeros((0, 0))
+        self.x = np.zeros((0, 0))
+
     @staticmethod
     def likefunc(v, loc, **kwargs):
         """
@@ -41,7 +55,7 @@ class Predictor(object):
         """
         raise NotImplementedError('To be implemented on a sub-class basis.')
 
-    def make_prediction(self, timepred, npoints=500, **kwargs):
+    def make_prediction(self, timepred=None, npoints=500, **kwargs):
         """
         Estimate posterior predictive distribution for a single future datum.
 
@@ -57,7 +71,8 @@ class Predictor(object):
         as the location parameter for the likelihood of the new datum at time t.
 
         :param iterable or float timepred: times on which posterior predictive
-        distributions are computed.
+        distributions are computed. If None, it default to current times
+        attribute, if not None.
 
         :param int npoints: number of points used to evaluate likelihood.
 
@@ -69,15 +84,32 @@ class Predictor(object):
         """
         verbose = kwargs.pop('verbose', False)
 
-        times = np.atleast_1d(timepred)
+        if timepred is None and self.times is None:
+            raise TypeError('Prediction time(s) must be given.')
+
+        elif self.times is None:
+            newtimes = np.atleast_1d(timepred)
+            self.times = newtimes
+
+        elif timepred is None:
+            newtimes = self.times
+
+        else:
+            # elif timepred is not None and self.times is not None:
+            warnings.warn('Prediction times already present in Predictor'
+                          'instace. Predictions for concatenated times will be '
+                          'produced. Use .reset method if you want to avoid '
+                          'this.')
+            newtimes = np.atleast_1d(timepred)
+            self.times = np.concatenate((self.times, newtimes))
 
         # Prepare output arrays
-        predictives = np.zeros((len(times), npoints))
+        predictives = np.zeros((len(newtimes), npoints))
         x = np.zeros_like(predictives)
 
-        for i, t in enumerate(times):
+        for i, t in enumerate(newtimes):
             if verbose:
-                print('Step {} of {}'.format(i+1, len(times)))
+                print('Step {} of {}'.format(i+1, len(newtimes)))
             # Compute location parameter at time t
             loc = self.model(self.posterior, t, *self.modelargs)
 
@@ -93,6 +125,14 @@ class Predictor(object):
 
             x[i] = v
             predictives[i] = like.mean(axis=1)
+
+        # Update predictives and x attributes.
+        if len(self.predictives) == 0:
+            self.predictives = predictives
+            self.x = x
+        else:
+            self.predictives = np.vstack((self.predictives, predictives))
+            self.x = np.vstack((self.x, x))
 
         return x, predictives
 
