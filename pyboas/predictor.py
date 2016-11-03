@@ -3,7 +3,7 @@ Module containing functions and classes to produce posterior predictive
 distribution.
 """
 from math import pi
-import warnings
+# import warnings
 import numpy as np
 
 
@@ -36,7 +36,8 @@ class Predictor(object):
         self.modelargs = extramodelargs
 
         # Initialise time for prediction.
-        self.times = None
+        self._times = None
+        self.newtimes = None
 
         # Initialise
         self.predictives = np.zeros((0, 0))
@@ -48,10 +49,38 @@ class Predictor(object):
         self.predictives = np.zeros((0, 0))
         self.x = np.zeros((0, 0))
 
+    @property
+    def times(self):
+        return self._times
+
+    @times.setter
+    def times(self, timepred=None):
+        """Set new times for prediction. Concatenates if already exist."""
+        if timepred is None and self._times is None:
+            raise TypeError('Prediction time(s) must be given.')
+
+        elif self._times is None:
+            self.newtimes = np.atleast_1d(timepred)
+            self._times = self.newtimes
+
+        elif timepred is None:
+            self.newtimes = self.times
+
+        else:
+            self.newtimes = np.atleast_1d(timepred)
+            self._times = np.concatenate((self.times, self.newtimes))
+
     @staticmethod
     def likefunc(v, loc, **kwargs):
         """
         Abstract method for likelihood functions
+        """
+        raise NotImplementedError('To be implemented on a sub-class basis.')
+
+    @staticmethod
+    def likedraw(loc, **kwargs):
+        """
+        Abstract method to draw samples from likelihood function.
         """
         raise NotImplementedError('To be implemented on a sub-class basis.')
 
@@ -84,44 +113,36 @@ class Predictor(object):
         """
         verbose = kwargs.pop('verbose', False)
 
-        if timepred is None and self.times is None:
-            raise TypeError('Prediction time(s) must be given.')
-
-        elif self.times is None:
-            newtimes = np.atleast_1d(timepred)
-            self.times = newtimes
-
-        elif timepred is None:
-            newtimes = self.times
-
-        else:
-            # elif timepred is not None and self.times is not None:
-            warnings.warn('Prediction times already present in Predictor'
-                          'instace. Predictions for concatenated times will be '
-                          'produced. Use .reset method if you want to avoid '
-                          'this.')
-            newtimes = np.atleast_1d(timepred)
-            self.times = np.concatenate((self.times, newtimes))
+        # Sets new prediction times. Note that this concatenates if previous
+        # prediction times were defined.
+        self.times = timepred
 
         # Prepare output arrays
-        predictives = np.zeros((len(newtimes), npoints))
+        predictives = np.zeros((len(self.newtimes), npoints))
         x = np.zeros_like(predictives)
 
-        for i, t in enumerate(newtimes):
+        # Compute location parameter at all newtimes at the same time.
+        # Up to x10 faster than doing it for each time, but need to be sure
+        # memory is not overflown.
+
+        loc = np.zeros((len(self.newtimes), len(self.posterior)))
+        # loc = self.model(self.posterior, self.newtimes, *self.modelargs)
+
+        for i, t in enumerate(self.newtimes):
             if verbose:
-                print('Step {} of {}'.format(i+1, len(newtimes)))
-            # Compute location parameter at time t
-            loc = self.model(self.posterior, t, *self.modelargs)
+                print('Step {} of {}'.format(i+1, len(self.newtimes)))
+
+            loc[i] = self.model(self.posterior, t, *self.modelargs)
 
             # Create auxiliary array where to evaluate posterior predictive
-            v = np.linspace(loc.min(), loc.max(), npoints)
+            v = np.linspace(loc[i].min(), loc[i].max(), npoints)
             # TODO extend this array on both sides in a generic manner.
             # v = np.linspace(loc.min() - 3 * scale, loc.max() + 3 * scale,
             #                npoints)
 
             # If scale is an array, it should have the same length than
             # posterior.
-            like = self.likefunc(v, loc, **kwargs)
+            like = self.likefunc(v, loc[i], **kwargs)
 
             x[i] = v
             predictives[i] = like.mean(axis=1)
@@ -135,6 +156,28 @@ class Predictor(object):
             self.x = np.vstack((self.x, x))
 
         return x, predictives
+
+    def samplepredictive(self, timesample, samplesize=None, **kwargs):
+        """
+        Produce samples from the posterior predictive distribution.
+
+        """
+        # Set new times for prediction. Note that this concatenates previous
+        # prediction times.
+        t = np.atleast_1d(timesample)
+
+        # The predicted data value for each posterior sample is simply
+        # y = m(theta) + N(0, sigma**2).
+        if samplesize != self.posterior.shape[0]:
+            post = self.posterior.copy()
+            np.random.shuffle(post)
+            psample = post[:samplesize]
+        else:
+            psample = self.posterior.copy()
+
+        loc = self.model(psample, t, *self.modelargs)
+
+        return self.likedraw(loc, **kwargs)
 
 
 class GaussPredictor(Predictor):
@@ -159,17 +202,17 @@ class GaussPredictor(Predictor):
 
         super(GaussPredictor, self).__init__(posterior, model,
                                              extramodelargs=extramodelargs)
-        self.scale = likescale
+        self.scale = likescale  # TODO: where should like scale be defined?
 
     @staticmethod
-    def likefunc(v, loc, scale=1):
+    def likefunc(v, loc, scale=None):
         """
         Gaussian likelihood function.
 
         The Gaussian is located in the position loc and has with variance
         scale**2.
 
-        :param float or np.array v: new datum value where .
+        :param float or np.array v: new datum value.
 
         :param float or np.array loc: location parameter of Gaussian function.
 
@@ -187,21 +230,16 @@ class GaussPredictor(Predictor):
         return np.exp(-0.5 * (v - loc) ** 2 / scale ** 2) / \
             np.sqrt(2 * pi * scale ** 2)
 
+    @staticmethod
+    def likedraw(loc, scale=1):
+        """
+        Draw sample from normal distribution
 
-# TODO complete this function and make it a method.
-def samplepredictive(posterior, tpred, model, likefun, scale, *modelargs,
-                     **kwargs):
-    """
-    Produce samples from the posterior predictive distribution based on
-    samples from the posterior of the model parameters.
+        :param float or np.array loc: location parameter of Gaussian function.
 
-
-    """
-    # Equivalently, we can draw samples from this distribution.
-    # The predicted data value for each posterior sample is simply
-    # y = m(theta) + N(0, sigma**2).
-
-    return model(posterior, tpred) + np.random.randn(nposterior, 1) * sigma
+        :param float or np.array scale: scale parameter for Gaussian function.
+        """
+        return loc + np.random.randn(len(loc), 1) * scale
 
 
 """
