@@ -135,10 +135,11 @@ class Predictor(object):
             loc[i] = self.model(self.posterior, t, *self.modelargs)
 
             # Create auxiliary array where to evaluate posterior predictive
-            v = np.linspace(loc[i].min(), loc[i].max(), npoints)
-            # TODO extend this array on both sides in a generic manner.
-            # v = np.linspace(loc.min() - 3 * scale, loc.max() + 3 * scale,
-            #                npoints)
+            deltax = loc[i].max() - loc[i].min()
+            # TODO check if this vector limits is always enough. Results
+            # change a lot.
+            v = np.linspace(loc[i].min() - deltax*2,
+                            loc[i].max() + deltax*2, npoints)
 
             # If scale is an array, it should have the same length than
             # posterior.
