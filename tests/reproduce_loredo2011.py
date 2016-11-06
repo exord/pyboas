@@ -24,7 +24,7 @@ def read_data():
 
 
 def run():
-    #np.random.seed(010605)
+    # np.random.seed(010605)
 
     # Read posterior samples from data directory.
     print('Reading data...')
@@ -37,8 +37,8 @@ def run():
 
     # Burn-in and flatten chain
     s = chain.shape
-    #posterior = chain[:, -500:, :].reshape(s[0] * 500, s[2])
-    posterior = chain.reshape(s[0]*s[1], s[2])
+    posterior = chain[:, -500:, :].reshape(s[0] * 500, s[2])
+    # posterior = chain.reshape(s[0]*s[1], s[2])
 
     # Define array with times where to predict future measurement.
     timepred = np.linspace(1500, 2200, 50)
@@ -103,6 +103,10 @@ def run():
     ax2.set_ylabel('E[$\Delta$I]', fontsize=16)
     plt.show()
 
+    return gpredictor
 
+
+"""
 if __name__ == '__main__':
     run()
+"""
