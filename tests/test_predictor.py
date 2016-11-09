@@ -23,7 +23,7 @@ def test_basic_shape():
 
     pred1 = predictor.GaussPredictor(posterior, toy_model)
 
-    pred1.make_prediction(time)
+    pred1.make_prediction(time, scale=1)
 
     # Test shape of predictive distributions and x
     assert pred1.x.shape == pred1.predictives.shape
@@ -45,11 +45,11 @@ def test_time_concatenation():
     pred2 = predictor.GaussPredictor(posterior, toy_model)
 
     # Run first predictor with full time array
-    pred1.make_prediction(time)
+    pred1.make_prediction(time, scale=1)
 
     # Run second predictor twice
-    pred2.make_prediction(time[:2])
-    pred2.make_prediction(time[2:])
+    pred2.make_prediction(time[:2], scale=1)
+    pred2.make_prediction(time[2:], scale=1)
 
     assert np.allclose(pred1.predictives, pred2.predictives)
     assert np.allclose(pred1.x, pred2.x)
@@ -61,7 +61,7 @@ def test_sample_draw():
     # Built random time array
     time = np.random.rand(4, )
 
-    pred1 = predictor.GaussPredictor(posterior, toy_model)
+    pred1 = predictor.GaussPredictor(posterior, toy_model, likescale=1)
 
     pred1.samplepredictive(time, 100)
 
