@@ -108,6 +108,8 @@ class Predictor(object):
         :keyword bool verbose: if True will print number of steps performed and
         remaing.
 
+        Remaining keywords parameters are passed to likefunc method.
+
         :return x, predictives: the x values where predictive distributions are
          evaluated and the distributions.
         """
@@ -131,22 +133,8 @@ class Predictor(object):
         for i, t in enumerate(self.newtimes):
             if verbose:
                 print('Step {} of {}'.format(i+1, len(self.newtimes)))
-
-            loc[i] = self.model(self.posterior, t, *self.modelargs)
-
-            # Create auxiliary array where to evaluate posterior predictive
-            deltax = loc[i].max() - loc[i].min()
-            # TODO check if this vector limits is always enough. Results
-            # change a lot.
-            v = np.linspace(loc[i].min() - deltax*2,
-                            loc[i].max() + deltax*2, npoints)
-
-            # If scale is an array, it should have the same length than
-            # posterior.
-            like = self.likefunc(v, loc[i], **kwargs)
-
-            x[i] = v
-            predictives[i] = like.mean(axis=1)
+            loc[i], x[i], predictives[i] = self.single_prediction(t, npoints,
+                                                                  **kwargs)
 
         # Update predictives and x attributes.
         if len(self.predictives) == 0:
@@ -157,6 +145,29 @@ class Predictor(object):
             self.x = np.vstack((self.x, x))
 
         return x, predictives
+
+    def single_prediction(self, time, npoints=500, **kwargs):
+        """
+        Basic prediction action. Used by higher level make_prediction method.
+        :param float time: time at which prediction is done.
+        :param int npoints: number of elements in array used to evaluate
+        posterior predictive.
+        :return: location array, auxiliary evaluation array,
+        posterior predictive.
+        """
+        loc = self.model(self.posterior, time, *self.modelargs)
+
+        # Create auxiliary array where to evaluate posterior predictive
+        deltax = loc.max() - loc.min()
+        # TODO check if this vector limits is always enough. Results change a lot
+        v = np.linspace(loc.min() - deltax * 2,
+                        loc.max() + deltax * 2, npoints)
+
+        # If scale is an array, it should have the same length than
+        # posterior.
+        like = self.likefunc(v, loc, **kwargs)
+
+        return loc, v, like.mean(axis=1)
 
     def samplepredictive(self, timesample, samplesize=None, **kwargs):
         """
@@ -205,6 +216,8 @@ class GaussPredictor(Predictor):
                                              extramodelargs=extramodelargs)
         self.scale = likescale  # TODO: where should like scale be defined?
 
+    # TODO change this to class method to include self.likescale as default
+    # scale.
     @staticmethod
     def likefunc(v, loc, scale=None):
         """
@@ -223,6 +236,10 @@ class GaussPredictor(Predictor):
         of the future datum value and for all location and scales values. The
         shape is (nv, nloc).
         """
+        if scale is None:
+            raise TypeError('Scale not set for likelihood function of '
+                            'predictor.')
+
         v, loc, scale = np.atleast_1d(v, loc, scale)
 
         # Preparing to broadcast
@@ -232,7 +249,7 @@ class GaussPredictor(Predictor):
             np.sqrt(2 * pi * scale ** 2)
 
     @staticmethod
-    def likedraw(loc, scale=1):
+    def likedraw(loc, scale=None):
         """
         Draw sample from normal distribution
 
@@ -240,6 +257,10 @@ class GaussPredictor(Predictor):
 
         :param float or np.array scale: scale parameter for Gaussian function.
         """
+        if scale is None:
+            raise TypeError('Scale not set for likelihood function of '
+                            'predictor.')
+
         return loc + np.random.randn(len(loc), 1) * scale
 
 
