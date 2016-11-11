@@ -48,8 +48,9 @@ def run():
     likescale = np.sqrt(erv.mean() ** 2 + posterior[:, -1] ** 2)
 
     # Instantianate GaussPredictor
-    gpredictor = predictor.GaussPredictor(posterior, models.keplerian,
-                                          extramodelargs=(epoch, 'k1')
+    gpredictor = predictor.GaussPredictor(posterior, models.keplerian_fixed,
+                                          extramodelargs=(epoch, 'k1'),
+                                          likescale=likescale
                                           )
 
     print('Making predictions....')
@@ -84,7 +85,7 @@ def run():
     # Pick 20 random curves from posterior
     post = posterior.copy()
     np.random.shuffle(post)
-    rvall = models.keplerian(post[:20], tt, epoch, 'k1')
+    rvall = models.keplerian_fixed(post[:20], tt, epoch, 'k1')
 
     # Plot sample posterior curves
     ax.plot(tt, rvall, '-', color='0.45', alpha=0.3)
